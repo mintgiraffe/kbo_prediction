@@ -249,6 +249,12 @@ export async function submitPicks() {
     // Firebase에 저장 (firebase.js의 saveUserPicks 호출)
     // await saveUserPicks(userName, picks);
 
+    // UI 업데이트
+    document.getElementById('loginFormWrap').style.display = 'none';
+    document.getElementById('loggedInWrap').style.display = 'flex';
+    document.getElementById('loggedUserName').textContent = userName;
+    document.getElementById('loggedAvatar').textContent = userName.substring(0, 2).toUpperCase();
+
     if (submitBtn) {
       submitBtn.textContent = '예측 제출됨';
     }
@@ -284,6 +290,28 @@ export function cancelSubmit() {
 
   toast('예측이 취소되었습니다', 'success');
   renderMatches();
+}
+
+/**
+ * 로그아웃
+ */
+export function logout() {
+  // 상태 초기화
+  myName = '';
+  submitted = false;
+  picks = {};
+  mySubmittedPicks = {};
+
+  // UI 업데이트
+  document.getElementById('loginFormWrap').style.display = 'flex';
+  document.getElementById('loggedInWrap').style.display = 'none';
+  document.getElementById('userName').value = '';
+  document.getElementById('userPassword').value = '';
+  document.getElementById('submitBtn').disabled = false;
+  document.getElementById('submitBtn').textContent = '예측 제출하기';
+
+  renderMatches();
+  toast('로그아웃되었습니다', 'success');
 }
 
 /**

@@ -24,9 +24,6 @@
       <div class="nav-tab" data-page="page-history">내 기록</div>
       <div class="nav-tab admin-tab" data-page="page-admin">⚙️ 관리</div>
     </div>
-    <button id="themeToggle" style="margin-left:auto;padding:8px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--text);cursor:pointer;font-size:16px;transition:all 0.2s" title="테마 전환">
-      🌙
-    </button>
   </nav>
 
   <!-- Connection Status Indicator -->
@@ -64,21 +61,35 @@
         <input type="date" id="datePicker" style="width:100%;padding:10px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)">
       </div>
 
-      <!-- User Info Card -->
-      <div class="user-card">
+      <!-- User Info Card - Login Form -->
+      <div class="user-card" id="loginFormWrap">
         <div class="user-avatar">👤</div>
         <div class="user-input-wrap">
           <div class="field-label">닉네임</div>
-          <input type="text" id="userName" placeholder="닉네임을 입력하세요">
+          <input type="text" id="userName" maxlength="20" placeholder="닉네임 입력" oninput="updateAvatar()">
         </div>
       </div>
 
-      <div class="user-card">
+      <div class="user-card" id="pwdCard">
         <div class="user-avatar">🔐</div>
         <div class="user-input-wrap">
           <div class="field-label">비밀번호</div>
-          <input type="password" id="userPassword" placeholder="비밀번호를 입력하세요">
+          <input type="password" id="userPassword" placeholder="비밀번호 입력" onkeypress="if(event.key==='Enter')submitPicks()">
         </div>
+      </div>
+
+      <!-- Logged In Card -->
+      <div class="user-card" id="loggedInWrap" style="display:none;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:14px;flex:1">
+          <div class="user-avatar" id="loggedAvatar">👤</div>
+          <div>
+            <div class="field-label">현재 사용자</div>
+            <div id="loggedUserName" style="font-size:16px;font-weight:700"></div>
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="logout()" style="padding:8px 12px">
+          로그아웃
+        </button>
       </div>
 
       <!-- Matches Section -->
