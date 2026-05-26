@@ -476,7 +476,7 @@ textarea{resize:vertical;min-height:56px}
       <div class="user-avatar" id="userAvatarLetter">?</div>
       <div class="user-input-wrap">
         <div class="field-label">닉네임</div>
-        <input type="text" id="userName" placeholder="닉네임 입력" oninput="updateAvatar()">
+        <input type="text" id="userName" maxlength="20" placeholder="닉네임 입력" oninput="updateAvatar()">
       </div>
       <div class="user-input-wrap">
         <div class="field-label">비밀번호 (4자리)</div>
@@ -938,8 +938,8 @@ document.getElementById('submitBtn').textContent = '예측 제출하기';
     toast(`${name}님 새 계정으로 시작해요`, 'success');
   }
 
+  // 닉네임만 저장 (비밀번호는 보안상 저장하지 않음)
   localStorage.setItem('kbo_name', name);
-  localStorage.setItem('kbo_pw', pw);
 
   // 💡 로그인 성공 후 UI 변경
   document.getElementById('loginFormWrap').style.display = 'none';
@@ -955,7 +955,6 @@ document.getElementById('submitBtn').textContent = '예측 제출하기';
 // 💡 로그아웃 기능 새로 추가
 window.logout = function() {
   localStorage.removeItem('kbo_name');
-  localStorage.removeItem('kbo_pw');
   isLoggedIn = false;
   myName = '';
   myPw = '';
@@ -1168,17 +1167,21 @@ window.submitPrediction = async function() {
   document.getElementById('submitBtn').disabled = false;
   document.getElementById('submitBtn').textContent = '예측 제출하기';
 
-  await set(ref(db, `${currentKey()}/participants/${name}`), {
-    name,
-    pw: myPw,
-    correct: existing.correct || 0,
-    total: Object.keys(finalPicks).length,
-    picks: mySubmittedPicks,
-    submittedAt: Date.now()
-  });
-
-  toast(name + '님의 예측이 제출되었어요!','success');
-  setTimeout(() => showPage('history'), 1800);
+  try {
+    await set(ref(db, `${currentKey()}/participants/${name}`), {
+      name,
+      pw: myPw,
+      correct: existing.correct || 0,
+      total: Object.keys(finalPicks).length,
+      picks: mySubmittedPicks,
+      submittedAt: Date.now()
+    });
+    toast(name + '님의 예측이 제출되었어요!','success');
+    setTimeout(() => showPage('history'), 1800);
+  } catch (e) {
+    toast('저장 실패: ' + e.message, 'error');
+    document.getElementById('submitBtn').disabled = false;
+  }
 };
 
 // ── RANKING
@@ -1658,30 +1661,16 @@ window.resetAllData = async function() {
 };
 
 // ── INIT
+// 닉네임만 자동 채움. 비밀번호는 매번 직접 입력 (보안)
 const savedName = localStorage.getItem('kbo_name');
-const savedPw = localStorage.getItem('kbo_pw');
 
 if (savedName) {
   document.getElementById('userName').value = savedName;
-}
-if (savedPw) {
-  document.getElementById('userPw').value = savedPw;
-}
-if (savedName) {
   updateAvatar();
 }
-  
+
 syncDateUI();
 initFirebase("https://kbo-prediction-72dfe-default-rtdb.firebaseio.com");
-
-setTimeout(() => {
-  const savedName = localStorage.getItem('kbo_name');
-  const savedPw = localStorage.getItem('kbo_pw');
-
-  if (savedName && savedPw) {
-    login();
-  }
-}, 500);
 
 </script>
 </body>
