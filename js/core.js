@@ -195,6 +195,57 @@ function initDatePicker() {
   }
 }
 
+/**
+ * 테마 토글 핸들러
+ */
+function initThemeToggle() {
+  const themeToggle = document.getElementById('themeToggle');
+  if (!themeToggle) return;
+
+  // 저장된 테마 복원
+  const savedTheme = localStorage.getItem('kbo_theme') || 'dark';
+  applyTheme(savedTheme);
+
+  themeToggle.addEventListener('click', () => {
+    const currentTheme = localStorage.getItem('kbo_theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(newTheme);
+    localStorage.setItem('kbo_theme', newTheme);
+  });
+}
+
+/**
+ * 테마 적용
+ */
+function applyTheme(theme) {
+  const root = document.documentElement;
+  const themeToggle = document.getElementById('themeToggle');
+
+  if (theme === 'light') {
+    root.style.setProperty('--bg', '#ffffff');
+    root.style.setProperty('--bg2', '#f5f5f5');
+    root.style.setProperty('--bg3', '#eeeeee');
+    root.style.setProperty('--bg4', '#e0e0e0');
+    root.style.setProperty('--text', '#1a1a1a');
+    root.style.setProperty('--text2', '#666666');
+    root.style.setProperty('--text3', '#999999');
+    root.style.setProperty('--border', 'rgba(0,0,0,0.1)');
+    root.style.setProperty('--border2', 'rgba(0,0,0,0.2)');
+    if (themeToggle) themeToggle.textContent = '☀️';
+  } else {
+    root.style.setProperty('--bg', '#0d0f14');
+    root.style.setProperty('--bg2', '#151820');
+    root.style.setProperty('--bg3', '#1c2030');
+    root.style.setProperty('--bg4', '#232840');
+    root.style.setProperty('--text', '#f0f2f8');
+    root.style.setProperty('--text2', '#9aa3be');
+    root.style.setProperty('--text3', '#5a6380');
+    root.style.setProperty('--border', 'rgba(255,255,255,0.06)');
+    root.style.setProperty('--border2', 'rgba(255,255,255,0.12)');
+    if (themeToggle) themeToggle.textContent = '🌙';
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────
 // INITIALIZATION
 // ────────────────────────────────────────────────────────────────────
@@ -207,6 +258,7 @@ function initApp() {
   initNavigation();
   initUserInputHandlers();
   initDatePicker();
+  initThemeToggle();
 
   // 저장된 사용자명 복원
   const savedName = localStorage.getItem('kbo_name');

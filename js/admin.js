@@ -155,6 +155,77 @@ export function addFiveMatches() {
 }
 
 /**
+ * 기본 5경기 세팅 (테스트용)
+ */
+export function initializeDefaultMatches() {
+  matches = [
+    {
+      id: 0,
+      team1: 'LG 트윈스',
+      emoji1: '🐯',
+      pitcher1: '선발 투수 1',
+      team2: 'KIA 타이거즈',
+      emoji2: '🐅',
+      pitcher2: '선발 투수 2',
+      time: '14:00',
+      stadium: '잠실',
+      result: null
+    },
+    {
+      id: 1,
+      team1: '삼성 라이온즈',
+      emoji1: '🦁',
+      pitcher1: '선발 투수 3',
+      team2: '두산 베어스',
+      emoji2: '🐻',
+      pitcher2: '선발 투수 4',
+      time: '17:00',
+      stadium: '대구',
+      result: null
+    },
+    {
+      id: 2,
+      team1: 'SK 와이번스',
+      emoji1: '🐍',
+      pitcher1: '선발 투수 5',
+      team2: 'KT 위즈',
+      emoji2: '✨',
+      pitcher2: '선발 투수 6',
+      time: '18:30',
+      stadium: '수원',
+      result: null
+    },
+    {
+      id: 3,
+      team1: '롯데 자이언츠',
+      emoji1: '🎨',
+      pitcher1: '선발 투수 7',
+      team2: '한화 이글스',
+      emoji2: '🦅',
+      pitcher2: '선발 투수 8',
+      time: '18:30',
+      stadium: '사직',
+      result: null
+    },
+    {
+      id: 4,
+      team1: 'NC 다이노스',
+      emoji1: '🦕',
+      pitcher1: '선발 투수 9',
+      team2: '기아 타이거즈',
+      emoji2: '🐅',
+      pitcher2: '선발 투수 10',
+      time: '18:30',
+      stadium: '창원',
+      result: null
+    }
+  ];
+
+  renderAdminPanel();
+  toast('기본 5경기가 세팅되었습니다!', 'success');
+}
+
+/**
  * 경기 삭제
  */
 export function delMatch(index) {
