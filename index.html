@@ -759,9 +759,9 @@ function listenData() {
     } else if (!data) {
       if (matches.length === 0) {
         matches = [
-          {id:0,team1:'기아',emoji1:'🐅',pitcher1:'',team2:'한화',emoji2:'🔥',pitcher2:'',time:'18:30',stadium:'광주-기아 챔피언스 필드',result:null},
-          {id:1,team1:'롯데',emoji1:'🦅',pitcher1:'',team2:'삼성',emoji2:'⚡',pitcher2:'',time:'18:30',stadium:'사직구장',result:null},
-          {id:2,team1:'키움',emoji1:'🎯',pitcher1:'',team2:'LG',emoji2:'🏆',pitcher2:'',time:'18:30',stadium:'고척스카이돔',result:null},
+          {id:0,team1:'기아',,pitcher1:'',team2:'한화',,pitcher2:'',time:'18:30',stadium:'광주-기아 챔피언스 필드',result:null},
+          {id:1,team1:'롯데',,pitcher1:'',team2:'삼성',,pitcher2:'',time:'18:30',stadium:'사직구장',result:null},
+          {id:2,team1:'키움',,pitcher1:'',team2:'LG',,pitcher2:'',time:'18:30',stadium:'고척스카이돔',result:null},
         ];
         saveMatchesToDB();
       }
@@ -1521,10 +1521,10 @@ window.addMatchEditor = function() {
   matches.push({
     id,
     team1:'',
-    emoji1:'⚾',
+    ,
     pitcher1:'',
     team2:'',
-    emoji2:'⚾',
+    ,
     pitcher2:'',
     time:'18:30',
     stadium:'',
@@ -1537,8 +1537,8 @@ window.addFiveMatches = function() {
   for(let i=0; i<5; i++) {
     matches.push({
       id: matches.length,
-      team1:'', emoji1:'⚾', pitcher1:'',
-      team2:'', emoji2:'⚾', pitcher2:'',
+      team1:'', , pitcher1:'',
+      team2:'', , pitcher2:'',
       time:'18:30', stadium:'', result:null
     });
   }
