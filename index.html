@@ -754,8 +754,8 @@ function listenData() {
   const unsubMatches = onValue(matchRef, snap => {
     const data = snap.val();
 
-    if (data && Array.isArray(data) && data.length > 0) {
-      matches = data;
+    if (data && data.matches && Array.isArray(data.matches) && data.matches.length > 0) {
+      matches = data.matches;
     } else if (!data) {
       if (matches.length === 0) {
         matches = [
