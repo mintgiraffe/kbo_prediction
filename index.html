@@ -546,8 +546,9 @@ textarea{resize:vertical;min-height:56px}
   </div>
   <div class="main" style="margin-top:12px">
     <div style="display:flex; gap:8px; margin-bottom:16px; justify-content:center;">
-      <button id="upcoming-week-btn" class="apply-btn" style="width:auto; padding:10px 24px;" onclick="setUpcomingMode('week')">주간</button>
-      <button id="upcoming-month-btn" class="apply-btn" style="width:auto; padding:10px 24px; background:var(--bg3); color:var(--text2);" onclick="setUpcomingMode('month')">월별</button>
+      <button id="upcoming-week-btn" class="apply-btn" style="width:auto; padding:10px 20px;" onclick="setUpcomingMode('week')">주간</button>
+      <button id="upcoming-month-btn" class="apply-btn" style="width:auto; padding:10px 20px; background:var(--bg3); color:var(--text2);" onclick="setUpcomingMode('month')">월별</button>
+      <button id="upcoming-h2h-btn" class="apply-btn" style="width:auto; padding:10px 20px; background:var(--bg3); color:var(--text2);" onclick="setUpcomingMode('h2h')">상대전적</button>
     </div>
     <div id="upcomingList"></div>
   </div>
@@ -1776,18 +1777,19 @@ window.setUpcomingMode = function(mode) {
   upcomingMode = mode;
   const weekBtn = document.getElementById('upcoming-week-btn');
   const monthBtn = document.getElementById('upcoming-month-btn');
+  const h2hBtn = document.getElementById('upcoming-h2h-btn');
+
+  // 모든 버튼 비활성 스타일로
+  [weekBtn, monthBtn, h2hBtn].forEach(b => {
+    if (b) { b.style.background = 'var(--bg3)'; b.style.color = 'var(--text2)'; }
+  });
+  // 선택된 버튼만 활성화
+  const activeBtn = mode === 'week' ? weekBtn : (mode === 'month' ? monthBtn : h2hBtn);
+  if (activeBtn) { activeBtn.style.background = ''; activeBtn.style.color = ''; }
+
   if (mode === 'week') {
-    weekBtn.style.background = '';
-    weekBtn.style.color = '';
-    monthBtn.style.background = 'var(--bg3)';
-    monthBtn.style.color = 'var(--text2)';
     weekOffset = 0;
-  } else {
-    monthBtn.style.background = '';
-    monthBtn.style.color = '';
-    weekBtn.style.background = 'var(--bg3)';
-    weekBtn.style.color = 'var(--text2)';
-    // 월별 진입 시 오늘이 속한 달로 초기화
+  } else if (mode === 'month') {
     const t = new Date();
     calYear = t.getFullYear();
     calMonth = t.getMonth() + 1;
@@ -1906,6 +1908,12 @@ function renderUpcoming() {
   const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  // ── 상대전적 모드
+  if (upcomingMode === 'h2h') {
+    renderHeadToHead(container, SCHED);
+    return;
+  }
 
   // ── 주간 모드: 월~일 단위 (주 이동 가능)
   if (upcomingMode === 'week') {
@@ -2047,6 +2055,122 @@ function renderUpcoming() {
   container.innerHTML = html;
 }
 window.renderUpcoming = renderUpcoming;
+
+// ── 상대전적
+const ALL_TEAMS = ['LG','두산','KT','키움','한화','삼성','롯데','기아','NC','SSG'];
+let h2hTeam1 = '';
+let h2hTeam2 = '';
+
+window.selectH2HTeam = function(slot, team) {
+  if (slot === 1) h2hTeam1 = (h2hTeam1 === team) ? '' : team;
+  else h2hTeam2 = (h2hTeam2 === team) ? '' : team;
+  renderUpcoming();
+};
+
+// 두 팀의 전적 계산 (점수 있는 모든 경기에서)
+function calcH2H(t1, t2) {
+  const SCHED = getMergedSchedule();
+  let t1win = 0, t2win = 0, draw = 0;
+  const games = [];
+
+  for (const dateStr in SCHED) {
+    for (const g of SCHED[dateStr]) {
+      const involved = (g.team1 === t1 && g.team2 === t2) || (g.team1 === t2 && g.team2 === t1);
+      if (!involved) continue;
+
+      // 결과 확인
+      let result = g.result || null;
+      if (!result && pastResults[dateStr]) {
+        result = pastResults[dateStr][`${g.team1}_${g.team2}`];
+      }
+      if (!result || result === '경기취소') continue;
+
+      if (result === '무승부') { draw++; }
+      else if (result === t1) { t1win++; }
+      else if (result === t2) { t2win++; }
+
+      games.push({ date: dateStr, g, result });
+    }
+  }
+
+  games.sort((a, b) => b.date.localeCompare(a.date)); // 최신순
+  return { t1win, t2win, draw, games };
+}
+
+function renderHeadToHead(container, SCHED) {
+  // 팀 선택 버튼 생성
+  const teamButtons = (slot) => ALL_TEAMS.map(team => {
+    const selected = (slot === 1 ? h2hTeam1 : h2hTeam2) === team;
+    const disabled = (slot === 1 ? h2hTeam2 : h2hTeam1) === team; // 반대편이 이미 선택
+    return `<button onclick="selectH2HTeam(${slot}, '${team}')"
+      ${disabled ? 'disabled' : ''}
+      style="padding:6px 10px; border-radius:8px; font-size:12px; font-weight:600; cursor:${disabled?'not-allowed':'pointer'};
+        border:1px solid ${selected ? 'var(--accent)' : 'var(--border2)'};
+        background:${selected ? 'var(--accent)' : 'var(--bg2)'};
+        color:${selected ? '#000' : (disabled ? 'var(--text3)' : 'var(--text)')};
+        opacity:${disabled ? '0.4' : '1'};">${team}</button>`;
+  }).join('');
+
+  let html = `
+    <div style="margin-bottom:16px;">
+      <div style="font-size:13px; color:var(--text3); margin-bottom:8px;">첫 번째 팀</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">${teamButtons(1)}</div>
+      <div style="font-size:13px; color:var(--text3); margin-bottom:8px;">두 번째 팀</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">${teamButtons(2)}</div>
+    </div>`;
+
+  if (!h2hTeam1 || !h2hTeam2) {
+    html += `<div style="text-align:center; padding:40px 20px; color:var(--text3);">
+      <div style="font-size:40px; margin-bottom:12px;">⚔️</div>
+      <div style="font-size:14px;">두 팀을 선택하면 상대전적을 볼 수 있어요</div>
+    </div>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  const { t1win, t2win, draw, games } = calcH2H(h2hTeam1, h2hTeam2);
+  const total = t1win + t2win + draw;
+
+  // 전적 요약 카드
+  html += `
+    <div style="background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:20px;">
+      <div style="display:flex; align-items:center; justify-content:space-around; margin-bottom:16px;">
+        <div style="text-align:center; flex:1;">
+          <img src="${LOGO_MAP[h2hTeam1] || ''}" style="width:48px; height:48px; object-fit:contain; margin-bottom:6px;" onerror="this.style.display='none'">
+          <div style="font-weight:700; font-size:15px;">${h2hTeam1}</div>
+        </div>
+        <div style="text-align:center; padding:0 16px;">
+          <div style="font-size:28px; font-weight:800; white-space:nowrap;">
+            <span style="color:${t1win >= t2win ? 'var(--green)' : 'var(--text)'}">${t1win}</span>
+            <span style="color:var(--text3); font-size:18px;"> : </span>
+            <span style="color:${t2win >= t1win ? 'var(--green)' : 'var(--text)'}">${t2win}</span>
+          </div>
+          ${draw > 0 ? `<div style="font-size:12px; color:var(--text3); margin-top:4px;">무 ${draw}</div>` : ''}
+        </div>
+        <div style="text-align:center; flex:1;">
+          <img src="${LOGO_MAP[h2hTeam2] || ''}" style="width:48px; height:48px; object-fit:contain; margin-bottom:6px;" onerror="this.style.display='none'">
+          <div style="font-weight:700; font-size:15px;">${h2hTeam2}</div>
+        </div>
+      </div>
+      <div style="text-align:center; font-size:13px; color:var(--text3);">
+        총 ${total}경기 · ${h2hTeam1} ${total ? Math.round(t1win/total*100) : 0}% 승률
+      </div>
+    </div>`;
+
+  // 경기 목록
+  if (games.length === 0) {
+    html += `<div style="text-align:center; padding:30px; color:var(--text3); font-size:14px;">아직 맞대결 기록이 없어요</div>`;
+  } else {
+    html += `<div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:10px;">맞대결 기록</div>`;
+    html += games.map(item => {
+      const [y, m, d] = item.date.split('-').map(Number);
+      return `<div style="font-size:11px; color:var(--text3); margin:8px 0 4px;">${m}/${d}</div>${gameRowHtml(item.g, item.date)}`;
+    }).join('');
+  }
+
+  container.innerHTML = html;
+}
+
 
 
 window.addMatchEditor = function() {
