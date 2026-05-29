@@ -915,7 +915,7 @@ function toast(msg, type='') {
   document.querySelectorAll('.nav-tab')[map[id]].classList.add('active');
   if (id === 'ranking') renderRanking();
   if (id === 'cumulative') renderCumulativeRanking(); // 이 줄 추가
-  if (id === 'upcoming') renderUpcoming();
+  if (id === 'upcoming') { loadAllResults().then(() => renderUpcoming()); renderUpcoming(); }
   if (id === 'history') renderHistory();
   if (id === 'share') initShare();
   if (id === 'admin' && document.getElementById('adminPanelWrap').style.display !== 'none') renderAdminPanel();
@@ -1622,6 +1622,36 @@ let upcomingMode = 'week';
 let calYear = 2026;
 let calMonth = 5; // 현재 보고 있는 달 (1~12)
 let selectedCalDate = null; // 달력에서 선택한 날짜 문자열
+let weekOffset = 0; // 주간 모드: 0=이번주, -1=지난주, +1=다음주
+let pastResults = {}; // { '2026-05-29': { 0:'LG', 1:'무승부', ... } }
+let resultsLoaded = false;
+
+// Firebase에서 모든 경기 결과 불러오기
+async function loadAllResults() {
+  if (!db) return;
+  try {
+    const snap = await get(ref(db));
+    const data = snap.val() || {};
+    const res = {};
+    for (const k in data) {
+      if (k.startsWith('kbo_') && data[k].matches) {
+        const dateStr = k.replace('kbo_', '');
+        const matchArr = Array.isArray(data[k].matches) ? data[k].matches : Object.values(data[k].matches);
+        res[dateStr] = {};
+        matchArr.forEach((mm, idx) => {
+          if (mm && mm.result) {
+            // 팀 이름으로 매칭 (id 대신 대진으로)
+            res[dateStr][`${mm.team1}_${mm.team2}`] = mm.result;
+          }
+        });
+      }
+    }
+    pastResults = res;
+    resultsLoaded = true;
+  } catch (e) {
+    console.error('결과 로딩 실패:', e);
+  }
+}
 
 window.setUpcomingMode = function(mode) {
   upcomingMode = mode;
@@ -1632,6 +1662,7 @@ window.setUpcomingMode = function(mode) {
     weekBtn.style.color = '';
     monthBtn.style.background = 'var(--bg3)';
     monthBtn.style.color = 'var(--text2)';
+    weekOffset = 0;
   } else {
     monthBtn.style.background = '';
     monthBtn.style.color = '';
@@ -1643,6 +1674,12 @@ window.setUpcomingMode = function(mode) {
     calMonth = t.getMonth() + 1;
     selectedCalDate = null;
   }
+  renderUpcoming();
+};
+
+// 주간 이동
+window.changeWeek = function(delta) {
+  weekOffset += delta;
   renderUpcoming();
 };
 
@@ -1664,19 +1701,48 @@ window.selectCalDate = function(dateStr) {
 
 const TEAM_KO = {LG:'LG',두산:'두산',롯데:'롯데',삼성:'삼성',기아:'기아',KT:'KT',NC:'NC',SSG:'SSG',한화:'한화',키움:'키움'};
 
-function gameRowHtml(g) {
+function gameRowHtml(g, dateStr) {
+  // 결과 조회 (대진으로 매칭)
+  let result = null;
+  if (dateStr && pastResults[dateStr]) {
+    result = pastResults[dateStr][`${g.team1}_${g.team2}`];
+  }
+
+  // 승패에 따른 스타일
+  let team1Style = 'font-weight:600; color:var(--text);';
+  let team2Style = 'font-weight:600; color:var(--text);';
+  let resultBadge = `<span style="color:var(--text3); font-size:12px; margin-left:12px; min-width:40px; text-align:right;">${g.stadium || ''}</span>`;
+
+  if (result) {
+    if (result === '무승부') {
+      resultBadge = `<span style="color:var(--text2); font-size:12px; margin-left:12px; min-width:40px; text-align:right; font-weight:700;">무승부</span>`;
+    } else if (result === '경기취소') {
+      team1Style = 'font-weight:600; color:var(--text3);';
+      team2Style = 'font-weight:600; color:var(--text3);';
+      resultBadge = `<span style="color:var(--text3); font-size:12px; margin-left:12px; min-width:40px; text-align:right;">취소</span>`;
+    } else if (result === g.team1) {
+      team1Style = 'font-weight:800; color:var(--green);';
+      team2Style = 'font-weight:600; color:var(--text3);';
+      resultBadge = `<span style="color:var(--green); font-size:12px; margin-left:12px; min-width:40px; text-align:right; font-weight:700;">${g.team1} 승</span>`;
+    } else if (result === g.team2) {
+      team2Style = 'font-weight:800; color:var(--green);';
+      team1Style = 'font-weight:600; color:var(--text3);';
+      resultBadge = `<span style="color:var(--green); font-size:12px; margin-left:12px; min-width:40px; text-align:right; font-weight:700;">${g.team2} 승</span>`;
+    }
+  }
+
   return `
     <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:6px;">
       <div style="display:flex; align-items:center; gap:8px; flex:1;">
         <img src="${LOGO_MAP[g.team1] || ''}" style="width:24px; height:24px; object-fit:contain;" onerror="this.style.display='none'">
-        <span style="font-weight:600; color:var(--text);">${g.team1}</span>
+        <span style="${team1Style}">${g.team1}</span>
       </div>
       <span style="color:var(--text3); font-size:13px; padding:0 8px;">vs</span>
       <div style="display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end;">
-        <span style="font-weight:600; color:var(--text);">${g.team2}</span>
+        <span style="${team2Style}">${g.team2}</span>
         <img src="${LOGO_MAP[g.team2] || ''}" style="width:24px; height:24px; object-fit:contain;" onerror="this.style.display='none'">
       </div>
-      <span style="color:var(--text3); font-size:12px; margin-left:12px; min-width:40px; text-align:right;">${g.stadium || ''}</span>
+      ${resultBadge}
     </div>`;
 }
 
@@ -1688,12 +1754,17 @@ function renderUpcoming() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // ── 주간 모드: 오늘부터 7일 리스트
+  // ── 주간 모드: 7일 리스트 (주 이동 가능)
   if (upcomingMode === 'week') {
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() + 6);
+    // weekOffset 적용: 이번 주 시작 = 오늘 + (offset*7)
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() + weekOffset * 7);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
 
-    let html = '';
+    const fmt = (dt) => `${dt.getMonth()+1}/${dt.getDate()}`;
+
+    let listHtml = '';
     let dayCount = 0;
     const dates = Object.keys(FULL_SCHEDULE).sort();
 
@@ -1701,7 +1772,7 @@ function renderUpcoming() {
       const [y, m, d] = dateStr.split('-').map(Number);
       const dateObj = new Date(y, m - 1, d);
       dateObj.setHours(0, 0, 0, 0);
-      if (dateObj < today || dateObj > endDate) continue;
+      if (dateObj < startDate || dateObj > endDate) continue;
 
       const games = FULL_SCHEDULE[dateStr];
       if (!games || games.length === 0) continue;
@@ -1709,23 +1780,33 @@ function renderUpcoming() {
       dayCount++;
       const wd = weekdayNames[dateObj.getDay()];
       const isToday = dateObj.getTime() === today.getTime();
+      const isPast = dateObj < today;
 
-      html += `
+      listHtml += `
         <div style="margin-bottom:20px;">
-          <div style="font-size:15px; font-weight:700; color:var(--text); margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid var(--accent);">
-            ${m}월 ${d}일 (${wd}) ${isToday ? '<span style="color:var(--accent); font-size:13px;">· 오늘</span>' : ''}
+          <div style="font-size:15px; font-weight:700; color:var(--text); margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid ${isPast ? 'var(--border2)' : 'var(--accent)'};">
+            ${m}월 ${d}일 (${wd}) ${isToday ? '<span style="color:var(--accent); font-size:13px;">· 오늘</span>' : (isPast ? '<span style="color:var(--text3); font-size:13px;">· 종료</span>' : '')}
           </div>
-          ${games.map(gameRowHtml).join('')}
+          ${games.map(g => gameRowHtml(g, dateStr)).join('')}
         </div>`;
     }
 
     if (dayCount === 0) {
-      html = `<div style="text-align:center; padding:60px 20px; color:var(--text3);">
+      listHtml = `<div style="text-align:center; padding:60px 20px; color:var(--text3);">
         <div style="font-size:48px; margin-bottom:16px;">📅</div>
-        <div style="font-size:16px;">이번 주 남은 예정 경기가 없습니다</div>
+        <div style="font-size:16px;">이 기간에 경기가 없습니다</div>
       </div>`;
     }
-    container.innerHTML = html;
+
+    // 주 이동 헤더
+    const header = `
+      <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin-bottom:16px;">
+        <button onclick="changeWeek(-1)" style="background:var(--bg3); border:1px solid var(--border2); border-radius:8px; width:36px; height:36px; color:var(--text); font-size:18px; cursor:pointer;">‹</button>
+        <div style="font-size:14px; font-weight:700; color:var(--text); min-width:120px; text-align:center;">${fmt(startDate)} ~ ${fmt(endDate)}</div>
+        <button onclick="changeWeek(1)" style="background:var(--bg3); border:1px solid var(--border2); border-radius:8px; width:36px; height:36px; color:var(--text); font-size:18px; cursor:pointer;">›</button>
+      </div>`;
+
+    container.innerHTML = header + listHtml;
     return;
   }
 
@@ -1800,7 +1881,7 @@ function renderUpcoming() {
         <div style="font-size:15px; font-weight:700; color:var(--text); margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid var(--accent);">
           ${m}월 ${d}일 (${wd})
         </div>
-        ${FULL_SCHEDULE[selectedCalDate].map(gameRowHtml).join('')}
+        ${FULL_SCHEDULE[selectedCalDate].map(g => gameRowHtml(g, selectedCalDate)).join('')}
       </div>`;
   } else {
     html += `<div style="text-align:center; padding:24px 20px; color:var(--text3); font-size:13px;">날짜를 선택하면 경기를 볼 수 있어요</div>`;
