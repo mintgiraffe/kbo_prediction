@@ -1786,13 +1786,17 @@ function renderUpcoming() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // ── 주간 모드: 7일 리스트 (주 이동 가능)
+  // ── 주간 모드: 월~일 단위 (주 이동 가능)
   if (upcomingMode === 'week') {
-    // weekOffset 적용: 이번 주 시작 = 오늘 + (offset*7)
+    // 이번 주 월요일 찾기 (월요일 시작)
     const startDate = new Date(today);
-    startDate.setDate(today.getDate() + weekOffset * 7);
+    const dow = startDate.getDay(); // 0=일, 1=월 ... 6=토
+    const diffToMonday = (dow === 0) ? -6 : (1 - dow); // 일요일이면 -6, 그 외 1-dow
+    startDate.setDate(today.getDate() + diffToMonday + weekOffset * 7);
+    startDate.setHours(0, 0, 0, 0);
+
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
+    endDate.setDate(startDate.getDate() + 6); // 일요일
 
     const fmt = (dt) => `${dt.getMonth()+1}/${dt.getDate()}`;
 
@@ -1834,7 +1838,7 @@ function renderUpcoming() {
     const header = `
       <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin-bottom:16px;">
         <button onclick="changeWeek(-1)" style="background:var(--bg3); border:1px solid var(--border2); border-radius:8px; width:36px; height:36px; color:var(--text); font-size:18px; cursor:pointer;">‹</button>
-        <div style="font-size:14px; font-weight:700; color:var(--text); min-width:120px; text-align:center;">${fmt(startDate)} ~ ${fmt(endDate)}</div>
+        <div style="font-size:14px; font-weight:700; color:var(--text); min-width:120px; text-align:center;">${fmt(startDate)} ~ ${fmt(endDate)}${weekOffset === 0 ? '<br><span style="font-size:11px; color:var(--accent);">이번 주</span>' : ''}</div>
         <button onclick="changeWeek(1)" style="background:var(--bg3); border:1px solid var(--border2); border-radius:8px; width:36px; height:36px; color:var(--text); font-size:18px; cursor:pointer;">›</button>
       </div>`;
 
