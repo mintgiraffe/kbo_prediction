@@ -454,6 +454,7 @@ textarea{resize:vertical;min-height:56px}
     <div class="nav-tab active" onclick="showPage('predict')">예측하기</div>
     <div class="nav-tab" onclick="showPage('ranking')">실시간 랭킹</div>
     <div class="nav-tab" onclick="showPage('cumulative')">누적 랭킹</div>
+    <div class="nav-tab" onclick="showPage('upcoming')">예정 경기</div>
     <div class="nav-tab" onclick="showPage('history')">내 기록</div>
     <div class="nav-tab" onclick="showPage('share')">공유하기</div>
     <div class="nav-tab admin-tab" onclick="showPage('admin')">⚙ 관리자</div>
@@ -533,6 +534,22 @@ textarea{resize:vertical;min-height:56px}
     <div class="rank-card" id="cumulativeRankList">
       <div class="rank-empty">아직 누적 데이터가 없어요<br><span style="font-size:12px;margin-top:4px;display:block">경기가 누적되면 순위가 나타납니다</span></div>
     </div>
+  </div>
+</div>
+
+<!-- UPCOMING -->
+<div class="page" id="page-upcoming">
+  <div class="hero" style="padding-bottom:16px">
+    <div class="hero-date">SCHEDULE</div>
+    <h1 class="hero-title">예정 <span class="acc">경기</span></h1>
+    <p class="hero-sub">다가오는 경기 일정을 확인하세요</p>
+  </div>
+  <div class="main" style="margin-top:12px">
+    <div style="display:flex; gap:8px; margin-bottom:16px; justify-content:center;">
+      <button id="upcoming-week-btn" class="apply-btn" style="width:auto; padding:10px 24px;" onclick="setUpcomingMode('week')">주간</button>
+      <button id="upcoming-month-btn" class="apply-btn" style="width:auto; padding:10px 24px; background:var(--bg3); color:var(--text2);" onclick="setUpcomingMode('month')">월별</button>
+    </div>
+    <div id="upcomingList"></div>
   </div>
 </div>
   
@@ -894,10 +911,11 @@ function toast(msg, type='') {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const map = {predict:0,ranking:1,cumulative:2,history:3,share:4,admin:5}; // cumulative 추가됨
+  const map = {predict:0,ranking:1,cumulative:2,upcoming:3,history:4,share:5,admin:6};
   document.querySelectorAll('.nav-tab')[map[id]].classList.add('active');
   if (id === 'ranking') renderRanking();
   if (id === 'cumulative') renderCumulativeRanking(); // 이 줄 추가
+  if (id === 'upcoming') renderUpcoming();
   if (id === 'history') renderHistory();
   if (id === 'share') initShare();
   if (id === 'admin' && document.getElementById('adminPanelWrap').style.display !== 'none') renderAdminPanel();
@@ -1598,7 +1616,100 @@ window.deleteUserAll = async function(userName) {
 
   toast(`${userName}님 계정 완전 삭제 완료! (${removed}일 기록 제거)`, 'success');
 };
-  
+
+// ── 예정 경기 (주간/월별)
+let upcomingMode = 'week';
+
+window.setUpcomingMode = function(mode) {
+  upcomingMode = mode;
+  // 버튼 스타일 토글
+  const weekBtn = document.getElementById('upcoming-week-btn');
+  const monthBtn = document.getElementById('upcoming-month-btn');
+  if (mode === 'week') {
+    weekBtn.style.background = '';
+    weekBtn.style.color = '';
+    monthBtn.style.background = 'var(--bg3)';
+    monthBtn.style.color = 'var(--text2)';
+  } else {
+    monthBtn.style.background = '';
+    monthBtn.style.color = '';
+    weekBtn.style.background = 'var(--bg3)';
+    weekBtn.style.color = 'var(--text2)';
+  }
+  renderUpcoming();
+};
+
+function renderUpcoming() {
+  const container = document.getElementById('upcomingList');
+  if (!container) return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // 표시 범위 계산
+  let endDate;
+  if (upcomingMode === 'week') {
+    endDate = new Date(today);
+    endDate.setDate(today.getDate() + 6); // 오늘부터 7일
+  } else {
+    endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // 이번 달 말일
+  }
+
+  const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  let html = '';
+  let dayCount = 0;
+
+  // FULL_SCHEDULE의 날짜를 순회 (정렬됨)
+  const dates = Object.keys(FULL_SCHEDULE).sort();
+
+  for (const dateStr of dates) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    dateObj.setHours(0, 0, 0, 0);
+
+    // 오늘 이전이거나 범위 밖이면 스킵
+    if (dateObj < today || dateObj > endDate) continue;
+
+    const games = FULL_SCHEDULE[dateStr];
+    if (!games || games.length === 0) continue;
+
+    dayCount++;
+    const wd = weekdayNames[dateObj.getDay()];
+    const isToday = dateObj.getTime() === today.getTime();
+
+    html += `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:15px; font-weight:700; color:var(--text); margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid var(--accent);">
+          ${m}월 ${d}일 (${wd}) ${isToday ? '<span style="color:var(--accent); font-size:13px;">· 오늘</span>' : ''}
+        </div>
+        ${games.map(g => `
+          <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:6px;">
+            <div style="display:flex; align-items:center; gap:8px; flex:1;">
+              <img src="${LOGO_MAP[g.team1] || ''}" style="width:24px; height:24px; object-fit:contain;" onerror="this.style.display='none'">
+              <span style="font-weight:600; color:var(--text);">${g.team1}</span>
+            </div>
+            <span style="color:var(--text3); font-size:13px; padding:0 8px;">vs</span>
+            <div style="display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end;">
+              <span style="font-weight:600; color:var(--text);">${g.team2}</span>
+              <img src="${LOGO_MAP[g.team2] || ''}" style="width:24px; height:24px; object-fit:contain;" onerror="this.style.display='none'">
+            </div>
+            <span style="color:var(--text3); font-size:12px; margin-left:12px; min-width:40px; text-align:right;">${g.stadium || ''}</span>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+
+  if (dayCount === 0) {
+    html = `<div style="text-align:center; padding:60px 20px; color:var(--text3);">
+      <div style="font-size:48px; margin-bottom:16px;">📅</div>
+      <div style="font-size:16px;">${upcomingMode === 'week' ? '이번 주' : '이번 달'} 남은 예정 경기가 없습니다</div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+window.renderUpcoming = renderUpcoming;
+
 window.addMatchEditor = function() {
   const id = matches.length;
   matches.push({
