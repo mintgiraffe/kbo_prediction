@@ -1071,6 +1071,18 @@ function updateCountdown() {
 }
   
 function renderMatches() {
+  if (!matches || matches.length === 0) {
+    document.getElementById('matchList').innerHTML = `
+      <div style="text-align:center; padding:60px 20px; color:var(--text3);">
+        <div style="font-size:48px; margin-bottom:16px;">⚾</div>
+        <div style="font-size:18px; font-weight:700; color:var(--text2); margin-bottom:8px;">오늘은 경기가 없습니다</div>
+        <div style="font-size:14px;">다음 경기를 기다려주세요!</div>
+      </div>`;
+    document.getElementById('statMatches').textContent = 0;
+    updatePickCount();
+    updateSubmitButtonState();
+    return;
+  }
   document.getElementById('matchList').innerHTML = matches.map(m => {
     const ratio = getPickRatio(m.id);
     const total = ratio.t1 + ratio.t2;
