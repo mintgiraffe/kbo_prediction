@@ -648,6 +648,12 @@ textarea{resize:vertical;min-height:56px}
         <div id="adminUserList"></div>
       </div>
       <div class="admin-section">
+        <div class="admin-section-title">🗂️ 전체 계정 관리</div>
+        <p style="font-size:13px;color:var(--text3);margin-bottom:12px">모든 날짜에 참여한 전체 계정 목록이에요. 예측을 안 한 날에도 계정을 삭제할 수 있어요.</p>
+        <button class="admin-btn" style="width:auto;padding:10px 24px;margin-bottom:14px;" onclick="loadAllAccounts()">🔄 전체 계정 불러오기</button>
+        <div id="allAccountList"></div>
+      </div>
+      <div class="admin-section">
         <div class="admin-section-title">🗑️ 데이터 초기화</div>
         <p style="font-size:13px;color:var(--text3);margin-bottom:12px">오늘 날짜의 모든 예측 및 랭킹 데이터를 삭제해요.</p>
         <button class="admin-btn" style="width:auto;padding:10px 24px;" onclick="resetAllData()">오늘 데이터 초기화</button>
@@ -1617,9 +1623,107 @@ window.deleteUserAll = async function(userName) {
   toast(`${userName}님 계정 완전 삭제 완료! (${removed}일 기록 제거)`, 'success');
 };
 
-// ── 예정 경기 (주간 리스트 / 월별 달력)
-let upcomingMode = 'week';
-let calYear = 2026;
+// ── 전체 계정 관리
+let allAccountsCache = [];
+
+window.loadAllAccounts = async function() {
+  if (!db) { toast('Firebase 연결 필요', 'error'); return; }
+  const listEl = document.getElementById('allAccountList');
+  listEl.innerHTML = '<p style="font-size:13px;color:var(--text3)">불러오는 중...</p>';
+
+  try {
+    const snap = await get(ref(db));
+    const data = snap.val() || {};
+
+    // 모든 날짜의 참여자를 모아서 누적 집계
+    const accounts = {}; // { name: { name, days, correct, total } }
+    for (const k in data) {
+      if (k.startsWith('kbo_') && data[k].participants) {
+        const parts = data[k].participants;
+        for (const name in parts) {
+          if (!accounts[name]) accounts[name] = { name, days: 0, correct: 0, total: 0 };
+          accounts[name].days += 1;
+          accounts[name].correct += (parts[name].correct || 0);
+          accounts[name].total += (parts[name].total || 0);
+        }
+      }
+    }
+
+    allAccountsCache = Object.values(accounts).sort((a, b) => b.total - a.total);
+    renderAllAccounts();
+  } catch (e) {
+    console.error('전체 계정 로딩 실패:', e);
+    listEl.innerHTML = '<p style="font-size:13px;color:#ef4444">불러오기 실패</p>';
+  }
+};
+
+function renderAllAccounts() {
+  const listEl = document.getElementById('allAccountList');
+  if (!listEl) return;
+
+  if (allAccountsCache.length === 0) {
+    listEl.innerHTML = '<p style="font-size:13px;color:var(--text3)">등록된 계정이 없어요</p>';
+    return;
+  }
+
+  listEl.innerHTML = `
+    <p style="font-size:12px;color:var(--text3);margin-bottom:8px">총 ${allAccountsCache.length}개 계정</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="border-bottom:1px solid var(--border2)">
+      <th style="text-align:left;padding:8px 0;color:var(--text3);font-weight:500">이름</th>
+      <th style="text-align:center;padding:8px 0;color:var(--text3);font-weight:500">참여일</th>
+      <th style="text-align:center;padding:8px 0;color:var(--text3);font-weight:500">맞힘</th>
+      <th style="text-align:right;padding:8px 0;color:var(--text3);font-weight:500">적중률</th>
+      <th style="text-align:center;padding:8px 0;color:var(--text3);font-weight:500">관리</th>
+    </tr>
+    ${allAccountsCache.map(a => {
+      const pct = a.total ? Math.round(a.correct / a.total * 100) : 0;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px 0">${escapeHtml(a.name)}</td>
+        <td style="text-align:center;color:var(--text2)">${a.days}일</td>
+        <td style="text-align:center;color:var(--green)">${a.correct}</td>
+        <td style="text-align:right;color:var(--accent)">${pct}%</td>
+        <td style="text-align:center;"><button class="del-btn" style="padding:3px 10px; font-size:11px; background:#b91c1c;" onclick='deleteAccountEverywhere(${JSON.stringify(a.name)})'>계정 삭제</button></td>
+      </tr>`;
+    }).join('')}
+    </table>`;
+}
+
+// 전체 계정 삭제 (모든 날짜에서 제거 + 목록 갱신)
+window.deleteAccountEverywhere = async function(userName) {
+  if (!db) { toast('Firebase 연결 필요', 'error'); return; }
+  if (!confirm(`'${userName}'님의 계정을 완전히 삭제할까요?\n\n⚠️ 모든 날짜의 예측 기록이 사라지며, 되돌릴 수 없습니다!`)) return;
+
+  toast('삭제 중...', '');
+
+  const snap = await get(ref(db));
+  const data = snap.val() || {};
+  let removed = 0;
+
+  for (const k in data) {
+    if (k.startsWith('kbo_') && data[k].participants && data[k].participants[userName]) {
+      await remove(ref(db, `${k}/participants/${userName}`));
+      removed++;
+    }
+  }
+
+  // 본인 계정이면 화면 상태 초기화
+  if (userName === myName) {
+    submitted = false;
+    picks = {};
+    mySubmittedPicks = {};
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('submitBtn').textContent = '예측 제출하기';
+    renderMatches();
+  }
+
+  // 캐시에서 제거 후 목록 갱신
+  allAccountsCache = allAccountsCache.filter(a => a.name !== userName);
+  renderAllAccounts();
+
+  toast(`${userName}님 계정 삭제 완료! (${removed}일 기록 제거)`, 'success');
+};
+
 let calMonth = 5; // 현재 보고 있는 달 (1~12)
 let selectedCalDate = null; // 달력에서 선택한 날짜 문자열
 let weekOffset = 0; // 주간 모드: 0=이번주, -1=지난주, +1=다음주
