@@ -842,23 +842,34 @@ const FULL_SCHEDULE = {"2026-05-29":[{"id":0,"team1":"LG","team2":"기아","stad
 // ── 전체 일정을 Firebase에 저장
 window.loadFullSchedule = async function() {
   if (!db) { toast('DB 연결 안됨', 'error'); return; }
-  if (!confirm('5월~9월 전체 410경기를 저장합니다. 계속할까요?')) return;
+  if (!confirm('5월~9월 전체 일정을 저장합니다. 계속할까요?')) return;
   
-  const dates = Object.keys(FULL_SCHEDULE);
-  let saved = 0;
+  let saved = 0, cleared = 0;
   
   toast('저장 중... 잠시만 기다려주세요', '');
   
-  for (const date of dates) {
+  // 5월 29일 ~ 9월 6일 모든 날짜 순회
+  const start = new Date(2026, 4, 29);
+  const end = new Date(2026, 8, 6);
+  
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     try {
-      await set(ref(db, `kbo_${date}/matches`), FULL_SCHEDULE[date]);
-      saved++;
+      if (FULL_SCHEDULE[date]) {
+        // 경기 있는 날 → 저장
+        await set(ref(db, `kbo_${date}/matches`), FULL_SCHEDULE[date]);
+        saved++;
+      } else {
+        // 경기 없는 날 → 잘못된 데이터 삭제
+        await remove(ref(db, `kbo_${date}/matches`));
+        cleared++;
+      }
     } catch (e) {
-      console.error('저장 실패:', date, e);
+      console.error('처리 실패:', date, e);
     }
   }
   
-  toast(`✅ ${saved}일 / ${dates.length}일 저장 완료!`, 'success');
+  toast(`✅ 저장 ${saved}일, 정리 ${cleared}일 완료!`, 'success');
   setTimeout(() => location.reload(), 1500);
 };
 
