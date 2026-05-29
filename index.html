@@ -454,6 +454,7 @@ textarea{resize:vertical;min-height:56px}
     <div class="nav-tab active" onclick="showPage('predict')">예측하기</div>
     <div class="nav-tab" onclick="showPage('ranking')">실시간 랭킹</div>
     <div class="nav-tab" onclick="showPage('cumulative')">누적 랭킹</div>
+    <div class="nav-tab" onclick="showPage('weekly')">주간 랭킹</div>
     <div class="nav-tab" onclick="showPage('upcoming')">경기 정보</div>
     <div class="nav-tab" onclick="showPage('history')">내 기록</div>
     <div class="nav-tab" onclick="showPage('share')">공유하기</div>
@@ -533,6 +534,20 @@ textarea{resize:vertical;min-height:56px}
   <div class="main" style="margin-top:12px">
     <div class="rank-card" id="cumulativeRankList">
       <div class="rank-empty">아직 누적 데이터가 없어요<br><span style="font-size:12px;margin-top:4px;display:block">경기가 누적되면 순위가 나타납니다</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- WEEKLY RANKING -->
+<div class="page" id="page-weekly">
+  <div class="hero" style="padding-bottom:16px">
+    <div class="hero-date">WEEKLY RANKING</div>
+    <h1 class="hero-title">이번 주 <span class="acc">랭킹</span></h1>
+    <p class="hero-sub" id="weeklyRangeLabel">이번 주 (월~일) 예측 순위</p>
+  </div>
+  <div class="main" style="margin-top:12px">
+    <div class="rank-card" id="weeklyRankList">
+      <div class="rank-empty">이번 주 데이터가 없어요<br><span style="font-size:12px;margin-top:4px;display:block">이번 주 경기 결과가 나오면 순위가 나타납니다</span></div>
     </div>
   </div>
 </div>
@@ -919,10 +934,11 @@ function toast(msg, type='') {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const map = {predict:0,ranking:1,cumulative:2,upcoming:3,history:4,share:5,admin:6};
+  const map = {predict:0,ranking:1,cumulative:2,weekly:3,upcoming:4,history:5,share:6,admin:7};
   document.querySelectorAll('.nav-tab')[map[id]].classList.add('active');
   if (id === 'ranking') renderRanking();
   if (id === 'cumulative') renderCumulativeRanking(); // 이 줄 추가
+  if (id === 'weekly') { loadAllResults().then(() => renderWeeklyRanking()); renderWeeklyRanking(); }
   if (id === 'upcoming') { loadAllResults().then(() => renderUpcoming()); renderUpcoming(); }
   if (id === 'history') renderHistory();
   if (id === 'share') initShare();
@@ -1372,6 +1388,76 @@ function renderCumulativeRanking() {
   }).join('');
 }
 
+// ── 주간 랭킹 (이번 주 월~일)
+function renderWeeklyRanking() {
+  const el = document.getElementById('weeklyRankList');
+  if (!el) return;
+
+  // 이번 주 월요일~일요일 범위 계산
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dow = today.getDay(); // 0=일, 1=월
+  const diffToMonday = (dow === 0) ? -6 : (1 - dow);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const fmt = (dt) => `${dt.getMonth()+1}/${dt.getDate()}`;
+  const rangeLabel = document.getElementById('weeklyRangeLabel');
+  if (rangeLabel) rangeLabel.textContent = `${fmt(monday)} ~ ${fmt(sunday)} 예측 순위`;
+
+  const toKey = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  const mondayKey = toKey(monday);
+  const sundayKey = toKey(sunday);
+
+  // 이번 주 날짜의 participants만 집계 (pastResults 로딩 때 받은 전체 데이터 활용)
+  // weeklyData는 loadAllResults에서 채워진 raw 데이터를 다시 읽어야 하므로 별도 변수 사용
+  const weekRanks = {};
+  for (const dateStr in weeklyParticipants) {
+    if (dateStr < mondayKey || dateStr > sundayKey) continue;
+    const parts = weeklyParticipants[dateStr];
+    for (const name in parts) {
+      if (!weekRanks[name]) weekRanks[name] = { name, correct: 0, total: 0 };
+      weekRanks[name].correct += (parts[name].correct || 0);
+      weekRanks[name].total += (parts[name].total || 0);
+    }
+  }
+
+  const list = Object.values(weekRanks);
+  if (list.length === 0) {
+    el.innerHTML = '<div class="rank-empty">이번 주 데이터가 없어요<br><span style="font-size:12px;margin-top:4px;display:block">이번 주 경기 결과가 나오면 순위가 나타납니다</span></div>';
+    return;
+  }
+
+  const sorted = list.sort((a, b) => {
+    const pa = a.total ? a.correct / a.total : 0;
+    const pb = b.total ? b.correct / b.total : 0;
+    return pb !== pa ? pb - pa : b.correct - a.correct;
+  });
+
+  const posLabel = i => ['🥇','🥈','🥉'][i] ?? (i + 1);
+  const posClass = i => ['p1','p2','p3'][i] ?? '';
+
+  el.innerHTML = sorted.map((r, i) => {
+    const pct = r.total ? Math.round(r.correct / r.total * 100) : 0;
+    const isMe = r.name === myName;
+    return `<div class="rank-row ${isMe ? 'me' : ''}">
+  <div class="rank-pos ${posClass(i)}">${posLabel(i)}</div>
+  <div class="rank-avatar-sm">${escapeHtml(r.name[0] || '?')}</div>
+ <div class="rank-info">
+  <div class="rank-name">${escapeHtml(r.name)}${isMe ? ' 👈' : ''}</div>
+  <div class="rank-detail">이번 주 ${r.correct}개 적중 · ${r.total}경기 참여</div>
+</div>
+      <div class="rank-right">
+        <div class="rank-pct-num">${pct}%</div>
+        <div class="rank-bar-wrap"><div class="rank-bar" style="width:${pct}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.renderWeeklyRanking = renderWeeklyRanking;
+
 // ── HISTORY
 function renderHistory() {
   const el = document.getElementById('historyContent');
@@ -1734,6 +1820,7 @@ let weekOffset = 0; // 주간 모드: 0=이번주, -1=지난주, +1=다음주
 let pastResults = {}; // { '2026-05-29': { 0:'LG', 1:'무승부', ... } }
 let resultsLoaded = false;
 let firebaseSchedule = {}; // Firebase에 저장된 경기 일정 (이전 경기 포함)
+let weeklyParticipants = {}; // { '2026-05-29': { 이름: {correct, total} } } 주간 랭킹용
 
 // Firebase에서 모든 경기(일정+결과) 불러오기
 async function loadAllResults() {
@@ -1743,9 +1830,17 @@ async function loadAllResults() {
     const data = snap.val() || {};
     const res = {};
     const sched = {};
+    const wkParts = {};
     for (const k in data) {
-      if (k.startsWith('kbo_') && data[k].matches) {
-        const dateStr = k.replace('kbo_', '');
+      if (!k.startsWith('kbo_')) continue;
+      const dateStr = k.replace('kbo_', '');
+
+      // 참여자 저장 (주간 랭킹용)
+      if (data[k].participants) {
+        wkParts[dateStr] = data[k].participants;
+      }
+
+      if (data[k].matches) {
         const matchArr = Array.isArray(data[k].matches) ? data[k].matches : Object.values(data[k].matches);
         if (!matchArr || matchArr.length === 0) continue;
 
@@ -1769,6 +1864,7 @@ async function loadAllResults() {
     }
     pastResults = res;
     firebaseSchedule = sched;
+    weeklyParticipants = wkParts;
     resultsLoaded = true;
   } catch (e) {
     console.error('결과 로딩 실패:', e);
