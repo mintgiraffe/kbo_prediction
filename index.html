@@ -760,19 +760,9 @@ function listenData() {
     if (data && Array.isArray(data) && data.length > 0) {
       matches = data;
       console.log('✅ 경기 로드됨:', matches.length, '개');
-    } else if (!data) {
-      if (matches.length === 0) {
-        matches = [
-          {id:0,team1:'기아',pitcher1:'',team2:'한화',pitcher2:'',time:'18:30',stadium:'광주-기아 챔피언스 필드',result:null},
-          {id:1,team1:'롯데',pitcher1:'',team2:'삼성',pitcher2:'',time:'18:30',stadium:'사직구장',result:null},
-          {id:2,team1:'키움',pitcher1:'',team2:'LG',pitcher2:'',time:'18:30',stadium:'고척스카이돔',result:null},
-          {id:3,team1:'두산',pitcher1:'',team2:'KT',pitcher2:'',time:'18:30',stadium:'잠실야구장',result:null},
-          {id:4,team1:'SSG',pitcher1:'',team2:'NC',pitcher2:'',time:'18:30',stadium:'인천SSG야구장',result:null},
-        ];
-        saveMatchesToDB();
-      }
     } else {
       matches = [];
+      console.log('📭 경기 없는 날');
     }
 
     renderMatches();
