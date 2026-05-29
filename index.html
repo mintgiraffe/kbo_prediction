@@ -1726,6 +1726,8 @@ window.deleteAccountEverywhere = async function(userName) {
   toast(`${userName}님 계정 삭제 완료! (${removed}일 기록 제거)`, 'success');
 };
 
+let upcomingMode = 'week';
+let calYear = 2026;
 let calMonth = 5; // 현재 보고 있는 달 (1~12)
 let selectedCalDate = null; // 달력에서 선택한 날짜 문자열
 let weekOffset = 0; // 주간 모드: 0=이번주, -1=지난주, +1=다음주
