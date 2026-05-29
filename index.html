@@ -1763,11 +1763,14 @@ function gameRowHtml(g, dateStr) {
 // FULL_SCHEDULE(기본) + firebaseSchedule(이전 경기 포함) 병합
 function getMergedSchedule() {
   const merged = {};
-  // 먼저 Firebase 일정 (이전 경기 포함)
+  // 먼저 Firebase 일정 (이전 경기 포함) — 단, 월요일은 자동생성 데이터일 가능성이 높아 제외
   for (const d in firebaseSchedule) {
+    const [y, m, day] = d.split('-').map(Number);
+    const dow = new Date(y, m - 1, day).getDay(); // 1=월요일
+    if (dow === 1) continue; // 월요일 스킵
     merged[d] = firebaseSchedule[d];
   }
-  // FULL_SCHEDULE로 덮어쓰기 (기본 데이터 우선)
+  // FULL_SCHEDULE로 덮어쓰기 (기본 데이터 우선 — 여기 있는 날은 월요일이어도 표시)
   for (const d in FULL_SCHEDULE) {
     merged[d] = FULL_SCHEDULE[d];
   }
