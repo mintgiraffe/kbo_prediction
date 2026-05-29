@@ -1610,15 +1610,24 @@ function renderAdminPanel() {
     </div>`).join('');
 
   document.getElementById('resultEditorList').innerHTML = matches.map((m, i) => `
-    <div class="result-editor">
-      <span class="result-match-name">${m.team1 || '?'} vs ${m.team2 || '?'}</span>
-      <select class="result-select" id="res-${i}">
-        <option value="">결과 미정</option>
-        ${m.team1 ? `<option value="${m.team1}" ${m.result === m.team1 ? 'selected' : ''}>${m.team1} 승</option>` : ''}
-        ${m.team2 ? `<option value="${m.team2}" ${m.result === m.team2 ? 'selected' : ''}>${m.team2} 승</option>` : ''}
-        <option value="무승부" ${m.result === '무승부' ? 'selected' : ''}>무승부</option>
-        <option value="경기취소" ${m.result === '경기취소' ? 'selected' : ''}>경기 취소</option>
-      </select>
+    <div class="result-editor" style="flex-wrap:wrap; gap:8px;">
+      <span class="result-match-name" style="width:100%; margin-bottom:4px;">${m.team1 || '?'} vs ${m.team2 || '?'}</span>
+      <div style="display:flex; align-items:center; gap:6px; width:100%;">
+        <input type="number" id="score1-${i}" placeholder="${m.team1||'홈'}" value="${m.score1 ?? ''}"
+          style="width:60px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; padding:8px; color:var(--text); text-align:center; font-size:14px;"
+          oninput="onScoreInput(${i})">
+        <span style="color:var(--text3); font-weight:700;">:</span>
+        <input type="number" id="score2-${i}" placeholder="${m.team2||'원정'}" value="${m.score2 ?? ''}"
+          style="width:60px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; padding:8px; color:var(--text); text-align:center; font-size:14px;"
+          oninput="onScoreInput(${i})">
+        <select class="result-select" id="res-${i}" style="flex:1;">
+          <option value="">결과 미정</option>
+          ${m.team1 ? `<option value="${m.team1}" ${m.result === m.team1 ? 'selected' : ''}>${m.team1} 승</option>` : ''}
+          ${m.team2 ? `<option value="${m.team2}" ${m.result === m.team2 ? 'selected' : ''}>${m.team2} 승</option>` : ''}
+          <option value="무승부" ${m.result === '무승부' ? 'selected' : ''}>무승부</option>
+          <option value="경기취소" ${m.result === '경기취소' ? 'selected' : ''}>경기 취소</option>
+        </select>
+      </div>
     </div>`).join('');
 
   renderAdminUserList();
@@ -1844,14 +1853,22 @@ async function loadAllResults() {
         const matchArr = Array.isArray(data[k].matches) ? data[k].matches : Object.values(data[k].matches);
         if (!matchArr || matchArr.length === 0) continue;
 
-        // 경기 일정 저장 (대진 정보)
-        sched[dateStr] = matchArr.filter(mm => mm && mm.team1 && mm.team2).map((mm, idx) => ({
-          id: idx,
-          team1: mm.team1,
-          team2: mm.team2,
-          stadium: mm.stadium || '',
-          time: mm.time || '18:30'
-        }));
+        // 경기 일정 저장 (대진 + 점수 + 결과 정보)
+        sched[dateStr] = matchArr.filter(mm => mm && mm.team1 && mm.team2).map((mm, idx) => {
+          const game = {
+            id: idx,
+            team1: mm.team1,
+            team2: mm.team2,
+            stadium: mm.stadium || '',
+            time: mm.time || '18:30'
+          };
+          if (mm.result) game.result = mm.result;
+          if (mm.score1 !== undefined && mm.score2 !== undefined) {
+            game.score1 = mm.score1;
+            game.score2 = mm.score2;
+          }
+          return game;
+        });
 
         // 결과 저장
         res[dateStr] = {};
@@ -2375,9 +2392,39 @@ window.applyMatches = async function() {
 };
 
 
+// 점수 입력 시 자동으로 승패 결정
+window.onScoreInput = function(i) {
+  const s1El = document.getElementById(`score1-${i}`);
+  const s2El = document.getElementById(`score2-${i}`);
+  const resEl = document.getElementById(`res-${i}`);
+  if (!s1El || !s2El || !resEl) return;
+
+  const s1 = s1El.value.trim();
+  const s2 = s2El.value.trim();
+  if (s1 === '' || s2 === '') return; // 둘 다 입력해야 자동 결정
+
+  const n1 = Number(s1), n2 = Number(s2);
+  const m = matches[i];
+  if (!m) return;
+
+  if (n1 > n2) resEl.value = m.team1;
+  else if (n2 > n1) resEl.value = m.team2;
+  else resEl.value = '무승부';
+};
+
 window.saveResults = async function() {
   matches.forEach((m, i) => {
     m.result = document.getElementById(`res-${i}`)?.value || null;
+    // 점수 저장 (입력된 경우만)
+    const s1 = document.getElementById(`score1-${i}`)?.value.trim();
+    const s2 = document.getElementById(`score2-${i}`)?.value.trim();
+    if (s1 !== '' && s1 !== undefined && s2 !== '' && s2 !== undefined) {
+      m.score1 = Number(s1);
+      m.score2 = Number(s2);
+    } else {
+      delete m.score1;
+      delete m.score2;
+    }
   });
 
   saveMatchesToDB();
