@@ -1601,6 +1601,9 @@ window.delMatch = function(i) {
 };
 
 window.applyMatches = async function() {
+  // 기존 경기 구성 백업 (팀 변경 여부 판단용)
+  const prevMatches = matches.map(m => ({id:m.id, team1:m.team1, team2:m.team2}));
+
   matches.forEach((m, i) => {
     const t1 = document.getElementById(`me-t1-${i}`)?.value || '';
     const t2 = document.getElementById(`me-t2-${i}`)?.value || '';
@@ -1620,33 +1623,46 @@ window.applyMatches = async function() {
     return;
   }
 
+  // 팀 구성이 실제로 바뀌었는지 확인 (경기 수 변동 또는 팀 변경)
+  let teamsChanged = matches.length !== prevMatches.length;
+  if (!teamsChanged) {
+    for (let i = 0; i < matches.length; i++) {
+      const prev = prevMatches[i];
+      if (!prev || prev.team1 !== matches[i].team1 || prev.team2 !== matches[i].team2) {
+        teamsChanged = true;
+        break;
+      }
+    }
+  }
+
   const hasParticipants = Object.keys(rankings).length > 0;
-  if (hasParticipants) {
+  // 팀이 바뀐 경우에만 예측 초기화 경고 (투수/시간만 바뀌면 유지)
+  if (hasParticipants && teamsChanged) {
     const ok = confirm(
-      `${selectedDateStr()}의 경기 정보를 바꾸면 기존 예측/랭킹 데이터가 초기화됩니다.\n계속할까요?`
+      `${selectedDateStr()}의 팀 구성을 바꾸면 기존 예측/랭킹 데이터가 초기화됩니다.\n계속할까요?`
     );
     if (!ok) return;
   }
 
   await set(ref(db, `${currentKey()}/matches`), matches);
 
-  if (hasParticipants) {
+  if (hasParticipants && teamsChanged) {
     await remove(ref(db, `${currentKey()}/participants`));
+
+    picks = {};
+    submitted = false;
+    mySubmittedPicks = {};
+
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('submitBtn').textContent = '예측 제출하기';
   }
-
-  picks = {};
-  submitted = false;
-  mySubmittedPicks = {};
-
-  document.getElementById('submitBtn').disabled = false;
-  document.getElementById('submitBtn').textContent = '예측 제출하기';
 
   renderMatches();
   renderAdminPanel();
   renderHistory();
   renderRanking();
 
-  toast('경기 정보가 적용되었어요!', 'success');
+  toast(teamsChanged ? '경기 정보가 적용되었어요!' : '투수/시간 정보가 저장되었어요! (예측 유지)', 'success');
 };
 
 
