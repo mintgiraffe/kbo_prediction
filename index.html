@@ -972,8 +972,9 @@ document.getElementById('submitBtn').textContent = '예측 제출하기';
     toast(`${name}님 새 계정으로 시작해요`, 'success');
   }
 
-  // 닉네임만 저장 (비밀번호는 보안상 저장하지 않음)
+  // 닉네임 + 비밀번호 저장 (자동 로그인)
   localStorage.setItem('kbo_name', name);
+  localStorage.setItem('kbo_pw', pw);
 
   // 💡 로그인 성공 후 UI 변경
   document.getElementById('loginFormWrap').style.display = 'none';
@@ -989,6 +990,7 @@ document.getElementById('submitBtn').textContent = '예측 제출하기';
 // 💡 로그아웃 기능 새로 추가
 window.logout = function() {
   localStorage.removeItem('kbo_name');
+  localStorage.removeItem('kbo_pw');
   isLoggedIn = false;
   myName = '';
   myPw = '';
@@ -1721,16 +1723,30 @@ window.resetAllData = async function() {
 };
 
 // ── INIT
-// 닉네임만 자동 채움. 비밀번호는 매번 직접 입력 (보안)
 const savedName = localStorage.getItem('kbo_name');
+const savedPw = localStorage.getItem('kbo_pw');
 
 if (savedName) {
   document.getElementById('userName').value = savedName;
+}
+if (savedPw) {
+  document.getElementById('userPw').value = savedPw;
+}
+if (savedName) {
   updateAvatar();
 }
 
 syncDateUI();
 initFirebase("https://kbo-prediction-72dfe-default-rtdb.firebaseio.com");
+
+// 저장된 닉네임+비밀번호가 있으면 자동 로그인
+setTimeout(() => {
+  const sName = localStorage.getItem('kbo_name');
+  const sPw = localStorage.getItem('kbo_pw');
+  if (sName && sPw) {
+    login();
+  }
+}, 800);
 
 </script>
 </body>
