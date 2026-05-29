@@ -1625,28 +1625,42 @@ let selectedCalDate = null; // 달력에서 선택한 날짜 문자열
 let weekOffset = 0; // 주간 모드: 0=이번주, -1=지난주, +1=다음주
 let pastResults = {}; // { '2026-05-29': { 0:'LG', 1:'무승부', ... } }
 let resultsLoaded = false;
+let firebaseSchedule = {}; // Firebase에 저장된 경기 일정 (이전 경기 포함)
 
-// Firebase에서 모든 경기 결과 불러오기
+// Firebase에서 모든 경기(일정+결과) 불러오기
 async function loadAllResults() {
   if (!db) return;
   try {
     const snap = await get(ref(db));
     const data = snap.val() || {};
     const res = {};
+    const sched = {};
     for (const k in data) {
       if (k.startsWith('kbo_') && data[k].matches) {
         const dateStr = k.replace('kbo_', '');
         const matchArr = Array.isArray(data[k].matches) ? data[k].matches : Object.values(data[k].matches);
+        if (!matchArr || matchArr.length === 0) continue;
+
+        // 경기 일정 저장 (대진 정보)
+        sched[dateStr] = matchArr.filter(mm => mm && mm.team1 && mm.team2).map((mm, idx) => ({
+          id: idx,
+          team1: mm.team1,
+          team2: mm.team2,
+          stadium: mm.stadium || '',
+          time: mm.time || '18:30'
+        }));
+
+        // 결과 저장
         res[dateStr] = {};
-        matchArr.forEach((mm, idx) => {
+        matchArr.forEach((mm) => {
           if (mm && mm.result) {
-            // 팀 이름으로 매칭 (id 대신 대진으로)
             res[dateStr][`${mm.team1}_${mm.team2}`] = mm.result;
           }
         });
       }
     }
     pastResults = res;
+    firebaseSchedule = sched;
     resultsLoaded = true;
   } catch (e) {
     console.error('결과 로딩 실패:', e);
@@ -1686,8 +1700,8 @@ window.changeWeek = function(delta) {
 // 월 이동 (5월~9월 범위)
 window.changeCalMonth = function(delta) {
   let m = calMonth + delta;
-  if (m < 5) m = 5;
-  if (m > 9) m = 9;
+  if (m < 3) m = 3;
+  if (m > 11) m = 11;
   calMonth = m;
   selectedCalDate = null;
   renderUpcoming();
@@ -1746,10 +1760,25 @@ function gameRowHtml(g, dateStr) {
     </div>`;
 }
 
+// FULL_SCHEDULE(기본) + firebaseSchedule(이전 경기 포함) 병합
+function getMergedSchedule() {
+  const merged = {};
+  // 먼저 Firebase 일정 (이전 경기 포함)
+  for (const d in firebaseSchedule) {
+    merged[d] = firebaseSchedule[d];
+  }
+  // FULL_SCHEDULE로 덮어쓰기 (기본 데이터 우선)
+  for (const d in FULL_SCHEDULE) {
+    merged[d] = FULL_SCHEDULE[d];
+  }
+  return merged;
+}
+
 function renderUpcoming() {
   const container = document.getElementById('upcomingList');
   if (!container) return;
 
+  const SCHED = getMergedSchedule();
   const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1766,7 +1795,7 @@ function renderUpcoming() {
 
     let listHtml = '';
     let dayCount = 0;
-    const dates = Object.keys(FULL_SCHEDULE).sort();
+    const dates = Object.keys(SCHED).sort();
 
     for (const dateStr of dates) {
       const [y, m, d] = dateStr.split('-').map(Number);
@@ -1774,7 +1803,7 @@ function renderUpcoming() {
       dateObj.setHours(0, 0, 0, 0);
       if (dateObj < startDate || dateObj > endDate) continue;
 
-      const games = FULL_SCHEDULE[dateStr];
+      const games = SCHED[dateStr];
       if (!games || games.length === 0) continue;
 
       dayCount++;
@@ -1816,8 +1845,8 @@ function renderUpcoming() {
   const lastDate = new Date(calYear, calMonth, 0).getDate();
 
   // 헤더 (월 이동 화살표)
-  const prevDisabled = calMonth <= 5 ? 'opacity:0.3; pointer-events:none;' : '';
-  const nextDisabled = calMonth >= 9 ? 'opacity:0.3; pointer-events:none;' : '';
+  const prevDisabled = calMonth <= 3 ? 'opacity:0.3; pointer-events:none;' : '';
+  const nextDisabled = calMonth >= 11 ? 'opacity:0.3; pointer-events:none;' : '';
 
   let html = `
     <div style="display:flex; align-items:center; justify-content:center; gap:24px; margin-bottom:16px;">
@@ -1844,7 +1873,7 @@ function renderUpcoming() {
     const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const dateObj = new Date(calYear, calMonth - 1, d);
     dateObj.setHours(0, 0, 0, 0);
-    const games = FULL_SCHEDULE[dateStr];
+    const games = SCHED[dateStr];
     const hasGame = games && games.length > 0;
     const isToday = dateObj.getTime() === today.getTime();
     const isSelected = selectedCalDate === dateStr;
@@ -1872,7 +1901,7 @@ function renderUpcoming() {
   html += `</div>`;
 
   // 선택된 날짜의 경기 표시
-  if (selectedCalDate && FULL_SCHEDULE[selectedCalDate]) {
+  if (selectedCalDate && SCHED[selectedCalDate]) {
     const [y, m, d] = selectedCalDate.split('-').map(Number);
     const dateObj = new Date(y, m - 1, d);
     const wd = weekdayNames[dateObj.getDay()];
@@ -1881,7 +1910,7 @@ function renderUpcoming() {
         <div style="font-size:15px; font-weight:700; color:var(--text); margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid var(--accent);">
           ${m}월 ${d}일 (${wd})
         </div>
-        ${FULL_SCHEDULE[selectedCalDate].map(g => gameRowHtml(g, selectedCalDate)).join('')}
+        ${SCHED[selectedCalDate].map(g => gameRowHtml(g, selectedCalDate)).join('')}
       </div>`;
   } else {
     html += `<div style="text-align:center; padding:24px 20px; color:var(--text3); font-size:13px;">날짜를 선택하면 경기를 볼 수 있어요</div>`;
