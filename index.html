@@ -1538,7 +1538,10 @@ function renderAdminUserList() {
   <td style="text-align:center;color:var(--green)">${r.correct}</td>
   <td style="text-align:center">${r.total}</td>
        <td style="text-align:right;color:var(--accent)">${pct}%</td>
-<td style="text-align:center;"><button class="del-btn" style="padding:3px 8px; font-size:11px;" onclick='deleteUserRecord(${JSON.stringify(r.name)})'>삭제</button></td>
+<td style="text-align:center;white-space:nowrap;">
+  <button class="del-btn" style="padding:3px 8px; font-size:11px;" onclick='deleteUserRecord(${JSON.stringify(r.name)})'>오늘삭제</button>
+  <button class="del-btn" style="padding:3px 8px; font-size:11px; background:#b91c1c; margin-left:4px;" onclick='deleteUserAll(${JSON.stringify(r.name)})'>완전삭제</button>
+</td>
 </tr>`;
     }).join('')}
   </table>`;
@@ -1562,6 +1565,38 @@ window.deleteUserRecord = async function(userName) {
   }
   
   toast(`${userName}님의 기록이 삭제되었어요!`, 'success');
+};
+
+// ── 계정 완전 삭제 (모든 날짜에서 제거)
+window.deleteUserAll = async function(userName) {
+  if (!db) { toast('Firebase 연결 필요','error'); return; }
+  if (!confirm(`'${userName}'님의 계정을 완전히 삭제할까요?\n\n⚠️ 모든 날짜의 예측 기록과 비밀번호가 사라지며, 되돌릴 수 없습니다!`)) return;
+
+  toast('삭제 중...', '');
+
+  // 전체 DB를 읽어서 모든 kbo_날짜에서 해당 유저 제거
+  const snap = await get(ref(db));
+  const data = snap.val() || {};
+  let removed = 0;
+
+  for (const k in data) {
+    if (k.startsWith('kbo_') && data[k].participants && data[k].participants[userName]) {
+      await remove(ref(db, `${k}/participants/${userName}`));
+      removed++;
+    }
+  }
+
+  // 관리자 본인 계정을 지웠다면 화면 상태 초기화
+  if (userName === myName) {
+    submitted = false;
+    picks = {};
+    mySubmittedPicks = {};
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('submitBtn').textContent = '예측 제출하기';
+    renderMatches();
+  }
+
+  toast(`${userName}님 계정 완전 삭제 완료! (${removed}일 기록 제거)`, 'success');
 };
   
 window.addMatchEditor = function() {
