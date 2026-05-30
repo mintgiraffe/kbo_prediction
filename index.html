@@ -813,8 +813,27 @@ function listenData() {
       matches = data;
       console.log('✅ 경기 로드됨:', matches.length, '개');
     } else {
-      matches = [];
-      console.log('📭 경기 없는 날');
+      // Firebase에 경기가 없으면 기본 일정(PAST_GAMES/FULL_SCHEDULE)에서 불러오기
+      const dateStr = key.replace('kbo_', '');
+      const fallback = (typeof PAST_GAMES !== 'undefined' && PAST_GAMES[dateStr]) ||
+                       (typeof FULL_SCHEDULE !== 'undefined' && FULL_SCHEDULE[dateStr]) || null;
+      if (fallback && fallback.length > 0) {
+        matches = fallback.map((g, idx) => ({
+          id: idx,
+          team1: g.team1,
+          team2: g.team2,
+          stadium: g.stadium || '',
+          time: g.time || '18:30',
+          pitcher1: g.pitcher1 || '',
+          pitcher2: g.pitcher2 || '',
+          result: g.result || null,
+          ...(g.score1 !== undefined ? { score1: g.score1, score2: g.score2 } : {})
+        }));
+        console.log('📋 기본 일정에서 로드:', matches.length, '개');
+      } else {
+        matches = [];
+        console.log('📭 경기 없는 날');
+      }
     }
 
     renderMatches();
@@ -2720,6 +2739,9 @@ window.saveResults = async function() {
   if (Object.keys(updatesObj).length > 0) {
     await update(ref(db), updatesObj);
   }
+
+  // 결과 캐시 갱신 → 팀 순위/경기정보/상대전적에 즉시 반영
+  await loadAllResults();
 
   renderAdminPanel();
   toast('결과가 저장되고 점수에 반영되었어요!','success');
