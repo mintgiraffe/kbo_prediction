@@ -2508,9 +2508,11 @@ window.saveResults = async function() {
   matches.forEach((m, i) => {
     m.result = document.getElementById(`res-${i}`)?.value || null;
     // 점수 저장 (입력된 경우만)
-    const s1 = document.getElementById(`score1-${i}`)?.value.trim();
-    const s2 = document.getElementById(`score2-${i}`)?.value.trim();
-    if (s1 !== '' && s1 !== undefined && s2 !== '' && s2 !== undefined) {
+    const s1El = document.getElementById(`score1-${i}`);
+    const s2El = document.getElementById(`score2-${i}`);
+    const s1 = s1El ? String(s1El.value).trim() : '';
+    const s2 = s2El ? String(s2El.value).trim() : '';
+    if (s1 !== '' && s2 !== '') {
       m.score1 = Number(s1);
       m.score2 = Number(s2);
     } else {
@@ -2518,6 +2520,7 @@ window.saveResults = async function() {
       delete m.score2;
     }
   });
+  console.log('💾 저장할 matches:', JSON.parse(JSON.stringify(matches)));
 
   saveMatchesToDB();
 
