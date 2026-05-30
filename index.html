@@ -455,6 +455,7 @@ textarea{resize:vertical;min-height:56px}
     <div class="nav-tab" onclick="showPage('ranking')">실시간 랭킹</div>
     <div class="nav-tab" onclick="showPage('cumulative')">누적 랭킹</div>
     <div class="nav-tab" onclick="showPage('weekly')">주간 랭킹</div>
+    <div class="nav-tab" onclick="showPage('standings')">팀 순위</div>
     <div class="nav-tab" onclick="showPage('upcoming')">경기 정보</div>
     <div class="nav-tab" onclick="showPage('history')">내 기록</div>
     <div class="nav-tab" onclick="showPage('share')">공유하기</div>
@@ -549,6 +550,18 @@ textarea{resize:vertical;min-height:56px}
     <div class="rank-card" id="weeklyRankList">
       <div class="rank-empty">이번 주 데이터가 없어요<br><span style="font-size:12px;margin-top:4px;display:block">이번 주 경기 결과가 나오면 순위가 나타납니다</span></div>
     </div>
+  </div>
+</div>
+
+<!-- TEAM STANDINGS -->
+<div class="page" id="page-standings">
+  <div class="hero" style="padding-bottom:16px">
+    <div class="hero-date">TEAM STANDINGS</div>
+    <h1 class="hero-title">KBO <span class="acc">팀 순위</span></h1>
+    <p class="hero-sub">우리 사이트 경기 결과 기준</p>
+  </div>
+  <div class="main" style="margin-top:12px">
+    <div id="standingsList"></div>
   </div>
 </div>
 
@@ -934,11 +947,12 @@ function toast(msg, type='') {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const map = {predict:0,ranking:1,cumulative:2,weekly:3,upcoming:4,history:5,share:6,admin:7};
+  const map = {predict:0,ranking:1,cumulative:2,weekly:3,standings:4,upcoming:5,history:6,share:7,admin:8};
   document.querySelectorAll('.nav-tab')[map[id]].classList.add('active');
   if (id === 'ranking') renderRanking();
   if (id === 'cumulative') renderCumulativeRanking(); // 이 줄 추가
   if (id === 'weekly') { loadAllResults().then(() => renderWeeklyRanking()); renderWeeklyRanking(); }
+  if (id === 'standings') { loadAllResults().then(() => renderStandings()); renderStandings(); }
   if (id === 'upcoming') { loadAllResults().then(() => renderUpcoming()); renderUpcoming(); }
   if (id === 'history') renderHistory();
   if (id === 'share') initShare();
@@ -1457,6 +1471,103 @@ function renderWeeklyRanking() {
   }).join('');
 }
 window.renderWeeklyRanking = renderWeeklyRanking;
+
+// ── KBO 팀 순위 (우리 경기 결과 집계)
+function renderStandings() {
+  const el = document.getElementById('standingsList');
+  if (!el) return;
+
+  const SCHED = getMergedSchedule();
+  // 팀별 전적 집계
+  const teams = {};
+  const ALL = ['LG','두산','KT','키움','한화','삼성','롯데','기아','NC','SSG'];
+  ALL.forEach(t => teams[t] = { team: t, w: 0, l: 0, d: 0 });
+
+  for (const dateStr in SCHED) {
+    for (const g of SCHED[dateStr]) {
+      // 결과 확인
+      let result = g.result || null;
+      if (!result && pastResults[dateStr]) {
+        result = pastResults[dateStr][`${g.team1}_${g.team2}`];
+      }
+      if (!result || result === '경기취소') continue;
+      if (!teams[g.team1] || !teams[g.team2]) continue;
+
+      if (result === '무승부') {
+        teams[g.team1].d++; teams[g.team2].d++;
+      } else if (result === g.team1) {
+        teams[g.team1].w++; teams[g.team2].l++;
+      } else if (result === g.team2) {
+        teams[g.team2].w++; teams[g.team1].l++;
+      }
+    }
+  }
+
+  // 승률 계산 후 정렬 (승률 = 승/(승+패), 무승부 제외)
+  const list = Object.values(teams).map(t => {
+    const games = t.w + t.l + t.d;
+    const decided = t.w + t.l;
+    const pct = decided ? t.w / decided : 0;
+    return { ...t, games, pct };
+  });
+  list.sort((a, b) => b.pct !== a.pct ? b.pct - a.pct : (b.w - b.l) - (a.w - a.l));
+
+  // 게임차 계산 (1위 기준)
+  const leader = list[0];
+  const leaderDiff = leader ? (leader.w - leader.l) : 0;
+
+  // 전체 경기 수가 0이면 안내
+  const totalGames = list.reduce((s, t) => s + t.games, 0);
+  if (totalGames === 0) {
+    el.innerHTML = '<div class="rank-empty">아직 경기 결과가 없어요<br><span style="font-size:12px;margin-top:4px;display:block">경기 결과가 입력되면 순위가 나타납니다</span></div>';
+    return;
+  }
+
+  const pctStr = (p) => p.toFixed(3).replace(/^0/, ''); // 0.667 → .667
+
+  let html = `
+    <div style="overflow-x:auto; background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:8px;">
+    <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:340px;">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border2); color:var(--text3);">
+          <th style="padding:10px 6px; text-align:center; font-weight:600;">순위</th>
+          <th style="padding:10px 6px; text-align:left; font-weight:600;">팀</th>
+          <th style="padding:10px 4px; text-align:center; font-weight:600;">경기</th>
+          <th style="padding:10px 4px; text-align:center; font-weight:600;">승</th>
+          <th style="padding:10px 4px; text-align:center; font-weight:600;">패</th>
+          <th style="padding:10px 4px; text-align:center; font-weight:600;">무</th>
+          <th style="padding:10px 6px; text-align:center; font-weight:600;">승률</th>
+          <th style="padding:10px 6px; text-align:center; font-weight:600;">게임차</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.map((t, i) => {
+          const gb = i === 0 ? '0.0' : (((leaderDiff) - (t.w - t.l)) / 2).toFixed(1);
+          const rankColor = i < 5 ? 'var(--accent)' : 'var(--text3)';
+          return `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px 6px; text-align:center; font-weight:800; color:${rankColor};">${i + 1}</td>
+            <td style="padding:10px 6px; text-align:left;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <img src="${LOGO_MAP[t.team] || ''}" style="width:22px; height:22px; object-fit:contain;" onerror="this.style.display='none'">
+                <span style="font-weight:700;">${t.team}</span>
+              </div>
+            </td>
+            <td style="padding:10px 4px; text-align:center; color:var(--text2);">${t.games}</td>
+            <td style="padding:10px 4px; text-align:center; color:var(--green); font-weight:700;">${t.w}</td>
+            <td style="padding:10px 4px; text-align:center; color:#ef4444;">${t.l}</td>
+            <td style="padding:10px 4px; text-align:center; color:var(--text3);">${t.d}</td>
+            <td style="padding:10px 6px; text-align:center; font-weight:700;">${pctStr(t.pct)}</td>
+            <td style="padding:10px 6px; text-align:center; color:var(--text2);">${gb}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    <p style="font-size:11px; color:var(--text3); margin-top:12px; text-align:center;">※ 우리 사이트에 입력된 경기 결과 기준입니다</p>`;
+
+  el.innerHTML = html;
+}
+window.renderStandings = renderStandings;
 
 // ── HISTORY
 function renderHistory() {
