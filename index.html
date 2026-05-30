@@ -1500,17 +1500,9 @@ async function loadMyStats() {
       daysParticipated++;
       totalPicks += Object.keys(myPicks).length;
 
-      // 그 날 경기 결과로 채점
-      const matchArr = node.matches ? (Array.isArray(node.matches) ? node.matches : Object.values(node.matches)) : [];
-      let dayCorrect = 0, dayScored = 0;
-      matchArr.forEach(mm => {
-        if (!mm) return;
-        const pick = myPicks[mm.id] ?? myPicks[String(mm.id)];
-        if (!pick) return;
-        if (!mm.result || mm.result === '무승부' || mm.result === '경기취소') return;
-        dayScored++;
-        if (mm.result === pick) dayCorrect++;
-      });
+      // 누적 랭킹과 동일하게, 저장된 correct/total 값을 사용 (계산 방식 일치)
+      const dayCorrect = me.correct || 0;
+      const dayScored = me.total || 0;
 
       totalCorrect += dayCorrect;
       totalScored += dayScored;
@@ -2093,16 +2085,23 @@ function getMergedSchedule() {
   for (const d in PAST_GAMES) {
     merged[d] = PAST_GAMES[d];
   }
-  // Firebase 일정 (이전 경기 포함) — 단, 월요일은 자동생성 데이터일 가능성이 높아 제외
+  // FULL_SCHEDULE (기본 일정, 점수 없음)
+  for (const d in FULL_SCHEDULE) {
+    merged[d] = FULL_SCHEDULE[d];
+  }
+  // Firebase 일정으로 덮어쓰기 (실제 입력된 점수/결과가 있으므로 최우선)
+  // 단, 월요일 자동생성 데이터는 제외
   for (const d in firebaseSchedule) {
     const [y, m, day] = d.split('-').map(Number);
     const dow = new Date(y, m - 1, day).getDay(); // 1=월요일
-    if (dow === 1) continue; // 월요일 스킵
-    if (!merged[d]) merged[d] = firebaseSchedule[d]; // 과거 데이터 우선
-  }
-  // FULL_SCHEDULE로 덮어쓰기 (기본 데이터 우선 — 여기 있는 날은 월요일이어도 표시)
-  for (const d in FULL_SCHEDULE) {
-    merged[d] = FULL_SCHEDULE[d];
+    const fbGames = firebaseSchedule[d];
+    // Firebase 데이터에 결과나 점수가 하나라도 있으면 우선 사용
+    const hasResults = fbGames.some(g => g.result || g.score1 !== undefined);
+    if (dow === 1 && !hasResults) continue; // 월요일이고 결과도 없으면 스킵
+    // 기본 일정이 없거나, Firebase에 결과가 있으면 Firebase 사용
+    if (!merged[d] || hasResults) {
+      merged[d] = fbGames;
+    }
   }
   return merged;
 }
