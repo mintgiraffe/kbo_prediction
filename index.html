@@ -1487,6 +1487,14 @@ async function loadMyStats() {
     let bestDay = null;     // { date, correct, total, pct }
     const dayResults = [];  // 날짜별 결과 (최근 적중률 추이용)
 
+    // 오늘/어제 날짜 키 계산
+    const todayD = new Date();
+    const yestD = new Date(); yestD.setDate(todayD.getDate() - 1);
+    const toKey = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    const todayKey = toKey(todayD);
+    const yestKey = toKey(yestD);
+    let todayDetail = null, yestDetail = null; // { picks, matches }
+
     for (const k in data) {
       if (!k.startsWith('kbo_')) continue;
       const dateStr = k.replace('kbo_', '');
@@ -1496,6 +1504,11 @@ async function loadMyStats() {
       const me = node.participants[myName];
       const myPicks = me.picks || {};
       if (Object.keys(myPicks).length === 0) continue;
+
+      // 오늘/어제 상세 저장
+      const matchArr = node.matches ? (Array.isArray(node.matches) ? node.matches : Object.values(node.matches)) : [];
+      if (dateStr === todayKey) todayDetail = { picks: myPicks, matches: matchArr };
+      if (dateStr === yestKey) yestDetail = { picks: myPicks, matches: matchArr };
 
       daysParticipated++;
       totalPicks += Object.keys(myPicks).length;
@@ -1571,6 +1584,36 @@ async function loadMyStats() {
         </div>`;
       }).join('');
     }
+
+    // 오늘 / 어제 예측 상세
+    const detailSection = (title, detail, dateStr) => {
+      if (!detail) return '';
+      const rows = detail.matches.map(mm => {
+        if (!mm) return '';
+        const pick = detail.picks[mm.id] ?? detail.picks[String(mm.id)];
+        if (!pick) return '';
+        let lbl = '<span style="font-size:12px; color:var(--text3); padding:2px 8px; background:var(--bg3); border-radius:6px;">결과 대기</span>';
+        if (mm.result) {
+          if (mm.result === '무승부' || mm.result === '경기취소') {
+            lbl = `<span style="font-size:12px; color:var(--text2); padding:2px 8px; background:var(--bg3); border-radius:6px;">${mm.result}</span>`;
+          } else {
+            const ok = mm.result === pick;
+            lbl = `<span style="font-size:12px; font-weight:700; padding:2px 8px; border-radius:6px; color:#fff; background:${ok ? 'var(--green)' : '#ef4444'};">${ok ? '✓ 적중' : '✗ 오답'}</span>`;
+          }
+        }
+        const scoreText = (mm.score1 !== undefined && mm.score2 !== undefined) ? ` <span style="color:var(--text3); font-size:12px;">(${mm.score1}:${mm.score2})</span>` : '';
+        return `<div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:6px;">
+          <span style="font-size:13px; color:var(--text2);">${mm.team1} vs ${mm.team2}${scoreText}</span>
+          <span style="font-size:13px; font-weight:700; color:var(--accent); margin:0 8px; flex:1; text-align:center;">${pick}</span>
+          ${lbl}
+        </div>`;
+      }).join('');
+      if (!rows) return '';
+      return `<div style="font-size:14px; font-weight:700; color:var(--text); margin:18px 0 10px;">${title} <span style="font-size:12px; color:var(--text3); font-weight:400;">${fmtDate(dateStr)}</span></div>${rows}`;
+    };
+
+    html += detailSection('🔵 오늘 예측', todayDetail, todayKey);
+    html += detailSection('⚪ 어제 예측', yestDetail, yestKey);
 
     el.innerHTML = html;
   } catch (e) {
