@@ -1512,6 +1512,15 @@ function renderStandings() {
   });
   list.sort((a, b) => b.pct !== a.pct ? b.pct - a.pct : (b.w - b.l) - (a.w - a.l));
 
+  // 공동 순위 계산 (KBO 방식: 승률 같으면 같은 순위, 다음은 건너뜀)
+  list.forEach((t, i) => {
+    if (i > 0 && Math.abs(t.pct - list[i-1].pct) < 0.0000001) {
+      t.rank = list[i-1].rank; // 앞 팀과 승률 같으면 동순위
+    } else {
+      t.rank = i + 1;
+    }
+  });
+
   // 게임차 계산 (1위 기준)
   const leader = list[0];
   const leaderDiff = leader ? (leader.w - leader.l) : 0;
@@ -1543,9 +1552,9 @@ function renderStandings() {
       <tbody>
         ${list.map((t, i) => {
           const gb = i === 0 ? '0.0' : (((leaderDiff) - (t.w - t.l)) / 2).toFixed(1);
-          const rankColor = i < 5 ? 'var(--accent)' : 'var(--text3)';
+          const rankColor = t.rank <= 5 ? 'var(--accent)' : 'var(--text3)';
           return `<tr style="border-bottom:1px solid var(--border);">
-            <td style="padding:10px 6px; text-align:center; font-weight:800; color:${rankColor};">${i + 1}</td>
+            <td style="padding:10px 6px; text-align:center; font-weight:800; color:${rankColor};">${t.rank}</td>
             <td style="padding:10px 6px; text-align:left;">
               <div style="display:flex; align-items:center; gap:8px;">
                 <img src="${LOGO_MAP[t.team] || ''}" style="width:22px; height:22px; object-fit:contain;" onerror="this.style.display='none'">
