@@ -2081,26 +2081,38 @@ function gameRowHtml(g, dateStr) {
 // FULL_SCHEDULE(기본) + firebaseSchedule(이전 경기 포함) 병합
 function getMergedSchedule() {
   const merged = {};
-  // 과거 경기 (점수 포함)
+  // 1. 과거 경기 (점수 포함) - 최우선 보호
   for (const d in PAST_GAMES) {
     merged[d] = PAST_GAMES[d];
   }
-  // FULL_SCHEDULE (기본 일정, 점수 없음)
+  // 2. FULL_SCHEDULE (기본 일정, 점수 없음) - PAST_GAMES에 없는 날만
   for (const d in FULL_SCHEDULE) {
-    merged[d] = FULL_SCHEDULE[d];
+    if (!merged[d]) merged[d] = FULL_SCHEDULE[d];
   }
-  // Firebase 일정으로 덮어쓰기 (실제 입력된 점수/결과가 있으므로 최우선)
-  // 단, 월요일 자동생성 데이터는 제외
+  // 3. Firebase 결과를 경기별로 병합 (점수/결과만 덮어쓰기, 일정 자체는 유지)
   for (const d in firebaseSchedule) {
     const [y, m, day] = d.split('-').map(Number);
     const dow = new Date(y, m - 1, day).getDay(); // 1=월요일
     const fbGames = firebaseSchedule[d];
-    // Firebase 데이터에 결과나 점수가 하나라도 있으면 우선 사용
     const hasResults = fbGames.some(g => g.result || g.score1 !== undefined);
-    if (dow === 1 && !hasResults) continue; // 월요일이고 결과도 없으면 스킵
-    // 기본 일정이 없거나, Firebase에 결과가 있으면 Firebase 사용
-    if (!merged[d] || hasResults) {
+
+    // PAST_GAMES에 이미 있는 날짜는 건드리지 않음 (과거 점수 보호)
+    if (PAST_GAMES[d]) continue;
+
+    if (dow === 1 && !hasResults) continue; // 월요일이고 결과 없으면 스킵
+
+    if (!merged[d]) {
+      // 기본 일정에 없는 날 → Firebase 그대로
       merged[d] = fbGames;
+    } else if (hasResults) {
+      // 기본 일정이 있는 날 → 같은 대진의 점수/결과만 덮어쓰기
+      merged[d] = merged[d].map(baseGame => {
+        const fb = fbGames.find(g => g.team1 === baseGame.team1 && g.team2 === baseGame.team2);
+        if (fb && (fb.result || fb.score1 !== undefined)) {
+          return { ...baseGame, result: fb.result, score1: fb.score1, score2: fb.score2 };
+        }
+        return baseGame;
+      });
     }
   }
   return merged;
